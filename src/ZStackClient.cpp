@@ -273,7 +273,7 @@ namespace ZStack
         return false;
     }
 
-    void ZStackClient::process(std::function<void(const ZStackFrame &)> onFrameReceived)
+    void ZStackClient::process()> onFrameReceived)
     {
         std::vector<uint8_t> buffer;
 
@@ -294,16 +294,6 @@ namespace ZStack
                     routeFrameToParser(frame);
 
                     LOG_DEBUG << ">>> DEBUG PROCESS FRAME FOUND" << std::endl;
-
-                    // 3. Invoke Callback
-                    if (onFrameReceived)
-                    {
-                        onFrameReceived(frame);
-                    }
-                    else
-                    {
-                        LOG_DEBUG << ">>> No Callback" << std::endl;
-                    }
                 }
             }
         }

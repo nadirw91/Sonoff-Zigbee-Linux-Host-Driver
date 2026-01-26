@@ -67,7 +67,6 @@ int main() {
     auto startTime = std::chrono::steady_clock::now();
     auto timeout = 100;
 
-    uint16_t tempShortAddr = 0x90CF;
 
     client.setZdoPacketHandler([&](const ZDOPacket::Packet& packet) {
         if (packet.type == ZDOPacket::DEVICE_ANNOUNCEMENT) {
@@ -138,134 +137,10 @@ int main() {
     });
 
     while(true) {
-        client.process([&](const ZStackFrame& frame) {            
-            // -----------------------------------------------------
-            // SCENARIO 1: NEW DEVICE JOINED / ANNOUNCED
-            // -----------------------------------------------------
-            // if (frame.getCommand0() == (AREQ | ZDO) && 
-            //     frame.getCommand1() == ZDO_END_DEVICE_ANNCE_IND) {
-                
-            //     auto p = frame.getPayload();
-            //     uint16_t shortAddr = p[2] | (p[3] << 8);
-            //     std::vector<uint8_t> ieeeBytes;
-            //     for(int i=0; i<8; i++) ieeeBytes.push_back(p[4+i]);
-            //     printIEEE(myIEEE);
-            //     std::string ieeeStr = ZStackClient::ieeeToString(ieeeBytes);
-
-            //     // A. Save to Database
-            //     deviceDB.addDevice(ieeeStr, shortAddr);
-
-            //     // B. Bind & Configure (Temperature 0x0402)
-            //     if (client.bindDevice(shortAddr, ieeeBytes, 0x0402, myIEEE)) {
-            //          // Wait a moment for sensor to process Bind before sending Config
-            //          std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                    
-            //          auto afRequest = ZStack::AFDataRequestFactory::configureReporting(shortAddr, 0x0402, 0x29);
-                
-            //         client.sendAndWait(
-            //             afRequest.frame,
-            //             afRequest.excpectedResponseCommand0,
-            //             afRequest.excpectedResponseCommand1
-            //         );
-            //     }
-
-            //     // C. Bind & Configure (Humidity 0x0405)
-            //     if (client.bindDevice(shortAddr, ieeeBytes, 0x0405, myIEEE)) {
-            //          std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            //         auto afRequest = ZStack::AFDataRequestFactory::configureReporting(shortAddr, 0x0405, 0x21);
-                    
-            //         client.sendAndWait(
-            //             afRequest.frame,
-            //             afRequest.excpectedResponseCommand0,
-            //             afRequest.excpectedResponseCommand1
-            //         );
-            //     }
-            // }
-
-            // -----------------------------------------------------
-            // SCENARIO 2: INCOMING DATA OR CONFIG RESPONSE
-            // -----------------------------------------------------
-            // if (frame.getCommand0() == (AREQ | AF) && 
-            //          frame.getCommand1() == AF_INCOMING_MSG) {
-                
-            //     auto p = frame.getPayload();
-            //     uint16_t srcAddr = p[4] | (p[5] << 8); 
-            //     std::string name = deviceDB.getName(srcAddr);
-
-            //     LOG_DEBUG << ">>> AF_INCOMING_MSG SRC ADDRESS: " << std::hex << std::setw(2) << (int)srcAddr << std::endl; 
-
-            //     LOG_DEBUG << ">>> AF_INCOMING_MSG PAYLOAD SIZE: " << std::hex << std::setw(2) << (int)p.size() << std::endl; 
-
-            //     int dataOffset = 17; // Standard Header Size
-            //     if (p.size() <= dataOffset) return; 
-
-            //     uint8_t zclCmd = p[dataOffset + 2];
-            //     uint16_t incomingClusterID = p[2] | (p[3] << 8);
-
-            //     LOG_DEBUG << ">>> [Config Response] From " << name 
-            //                   << " (Cluster " << getClusterName(incomingClusterID) << ") "
-            //                   << "ZCL Cmd: " << getZCLCommandName(zclCmd) << std::endl;
-
-            //     // A. CHECK FOR CONFIG RESPONSE (Receipt)
-            //     // ------------------------------------------------
-            //     // CASE A: CONFIGURATION RESPONSE (Receipt)
-            //     // ------------------------------------------------
-            //     if (zclCmd == 0x07) {
-            //         uint8_t status = p[dataOffset + 3];
-            //         if (status == 0x00) LOG_DEBUG << "    Result: SUCCESS" << std::endl;
-            //         else LOG_DEBUG << "    Result: FAIL (Code " << std::hex << (int)status << ")" << std::endl;
-            //     }
-
-            //     // ------------------------------------------------
-            //     // CASE B: TOGGLE COMMAND (Button Press) - MOVED HERE!
-            //     // ------------------------------------------------
-            //     else if (incomingClusterID == 0x0006 && zclCmd == 0x02) {
-            //         LOG_DEBUG << ">>> [" << name << "] ACTION: Button Pressed (Toggle)" << std::endl;                    
-            //     }
-
-            //     // ------------------------------------------------
-            //     // CASE C: AUDIT RESPONSE (Read Reporting Config)
-            //     // ------------------------------------------------
-            //     else if (zclCmd == 0x09) {
-            //         // Payload Structure:
-            //         // [Status] [Direction] [AttrID_L] [AttrID_H] [DataType] [Min_L] [Min_H] [Max_L] [Max_H] ...
-                    
-            //         uint8_t status = p[dataOffset + 3];
-                    
-            //         if (status == 0x00) {
-            //             // Success! Let's read the intervals.
-            //             // Offsets shift depending on alignment, but standard success is:
-            //             // Offset 8,9 = Min Interval
-            //             // Offset 10,11 = Max Interval
-                        
-            //             uint16_t minInt = p[dataOffset + 8] | (p[dataOffset + 9] << 8);
-            //             uint16_t maxInt = p[dataOffset + 10] | (p[dataOffset + 11] << 8);
-                        
-            //             LOG_DEBUG << ">>> [Audit Result] Cluster " << std::hex << incomingClusterID << " Rules:" << std::endl;
-            //             LOG_DEBUG << "    Min Interval: " << std::dec << minInt << " seconds" << std::endl;
-            //             LOG_DEBUG << "    Max Interval: " << std::dec << maxInt << " seconds" << std::endl;
-                        
-            //             // Verification Logic
-            //             if (maxInt == 600) {
-            //                 LOG_DEBUG << "    VERDICT: Config is CORRECT. (Sensor is just ignoring it)" << std::endl;
-            //             } else if (maxInt == 65535 || maxInt == 0) {
-            //                 LOG_DEBUG << "    VERDICT: Config is MISSING (Factory Default)." << std::endl;
-            //             } else {
-            //                 LOG_DEBUG << "    VERDICT: Config is set to " << maxInt << " seconds." << std::endl;
-            //             }
-            //         } else {
-            //             LOG_DEBUG << ">>> [Audit Result] Read Failed (Status: " << std::hex << (int)status << ")" << std::endl;
-            //         }
-            //     }
-            //}
-        });
+        client.process();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        // if (std::chrono::steady_clock::now() - startTime > std::chrono::milliseconds(100) && tempShortAddr != 0) {
-        //     startTime = std::chrono::steady_clock::now();
-        //     readTemperature(client, tempShortAddr);
-        // }
     }
     
     return 0;

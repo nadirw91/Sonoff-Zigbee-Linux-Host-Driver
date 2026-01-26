@@ -48,7 +48,7 @@ namespace ZStack {
                 const std::vector<uint8_t>& myIEEE
             );
             bool registerEndpoint();
-            void process(std::function<void(const ZStackFrame&)> onFrameReceived);
+            void process();
             bool permitJoin(uint8_t durationSeconds);
             std::optional<DeviceState> getDeviceState();
             bool startNetwork();

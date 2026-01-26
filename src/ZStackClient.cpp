@@ -499,22 +499,22 @@ namespace ZStack
         {
         case AF:
         {
-            // LOG_DEBUG << "AF Frame Detected:" << std::hex << std::setw(2) << (int)subsystem << std::endl;
-            // auto afResponse = AFPacket::parseZStackFrame(frame);
+            LOG_DEBUG << "AF Frame Detected:" << std::hex << std::setw(2) << (int)subsystem << std::endl;
+            auto afResponse = AFPacket::parseZStackFrame(frame);
 
-            // if (afResponse == nullptr)
-            // {
-            //     LOG_DEBUG << "Client AF Packet Parser returned null." << std::endl;
-            // }
-            // else
-            // {
-            //     LOG_DEBUG << "Client AF Packet Parser returned valid packet. Type: " << (int)afResponse->type << std::endl;
-            // }
+            if (afResponse == nullptr)
+            {
+                LOG_DEBUG << "Client AF Packet Parser returned null." << std::endl;
+            }
+            else
+            {
+                LOG_DEBUG << "Client AF Packet Parser returned valid packet. Type: " << (int)afResponse->type << std::endl;
+            }
 
-            // if (afResponse && afPacketHandler)
-            // {
-            //     afPacketHandler(*afResponse);
-            // }
+            if (afResponse && afPacketHandler)
+            {
+                afPacketHandler(*afResponse);
+            }
             break;
         }
         case ZDO:

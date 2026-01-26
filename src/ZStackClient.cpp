@@ -273,7 +273,7 @@ namespace ZStack
         return false;
     }
 
-    void ZStackClient::process()> onFrameReceived)
+    void ZStackClient::process()
     {
         std::vector<uint8_t> buffer;
 

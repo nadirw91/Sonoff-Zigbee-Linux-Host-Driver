@@ -439,7 +439,11 @@ namespace ZStack
             return true;
         }
 
-        LOG_DEBUG << "Bind Failed." << std::endl;
+        auto bindResponse = std::make_unique<ZDOPacket::BindRequestResponse>();
+        bindResponse->srcAddress = targetShortAddr;
+        bindResponse->success = false;
+
+        zdoPacketHandler(*bindResponse);
 
         return false;
     }

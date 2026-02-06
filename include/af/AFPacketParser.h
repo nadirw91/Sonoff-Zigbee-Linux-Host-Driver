@@ -11,7 +11,10 @@ namespace AFPacket {
         TEMPERATURE_SENSOR = 0x01,
         HUMIDITY_SENSOR = 0x02,
         BATTERY_SENSOR = 0x03,
-        ACTION_PRESS = 0x04
+        ACTION_PRESS = 0x04,
+        SWITCH_DEVICE = 0x05,
+        POWER_CONSUMPTION_DEVICE = 0x06,
+        INSTANTANEOUS_POWER_CONSUMPTION_CLUSTER = 0x07,
     };
 
     struct Packet {
@@ -49,6 +52,14 @@ namespace AFPacket {
         }
     };
 
+    struct OnOffReading: public DeviceReading {
+        uint16_t shortAddr;
+        bool isOn;
+        OnOffReading() {
+            this->type = SWITCH_DEVICE;
+        }
+    };
+
     struct ButtonPressAction: public DeviceReading {
         ButtonPressAction(){
             this->type = ACTION_PRESS;
@@ -65,8 +76,6 @@ namespace AFPacket {
     };
 
     std::unique_ptr<AFPacket::Packet> parseZStackFrame(const ZStack::ZStackFrame& frame);
-    
-    static std::unique_ptr<AFPacket::DeviceReading> parseDeviceReadingData(uint8_t zclCmd, const uint16_t srcAddr, const uint16_t incomingClusterID, const std::vector<uint8_t> p);
 }
 
 #endif

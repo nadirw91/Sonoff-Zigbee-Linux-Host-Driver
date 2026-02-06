@@ -6,8 +6,147 @@
 #include "af/AFPacketParser.h"
 #include "IntUtils.h"
 #include "Logger.h"
+#include "ZStackProtocol.h"
 
 using namespace ZStack;
+
+namespace
+{
+    // Returns the length of the data value based on ZCL Data Type
+    // Returns -1 if variable length (like string) or unknown
+    static int getDataTypeLength(uint8_t dataType)
+    {
+        switch (dataType)
+        {
+        case 0x10: // Boolean
+        case 0x18: // Bitmap8
+        case 0x20: // Uint8
+        case 0x30: // Enum8
+            return 1;
+        case 0x21: // Uint16
+        case 0x29: // Int16
+        case 0x19: // Bitmap16
+            return 2;
+        case 0x23: // Uint32
+        case 0x2B: // Int32
+        case 0x39: // Single Precision Float
+            return 4;
+        case 0x42:     // Char String (First byte is length)
+            return -1; // Special handling needed
+        default:
+            return 0; // Unknown
+        }
+    }
+
+    std::unique_ptr<AFPacket::DeviceReading> parseDeviceReadingData(uint8_t zclCmd, const uint16_t srcAddr, const uint16_t incomingClusterID, const std::vector<uint8_t> &p)
+    {
+        // 1. Setup Offsets
+        uint8_t dataOffset = 17; // Start of ZCL Frame
+        if (p.size() < dataOffset + 3)
+            return nullptr;
+
+        // Define where the Attribute List starts inside the ZCL Frame
+        // Reports (0x0A): Frame(3) + AttrList...
+        // ReadRsp (0x01): Frame(3) + AttrList... (Status is inside the loop for ReadRsp)
+        int currentIndex = dataOffset + 3;
+
+        // 2. Loop through all attributes in the packet
+        while (currentIndex + 2 < p.size())
+        {
+
+            uint16_t attrID = p[currentIndex] | (p[currentIndex + 1] << 8);
+            currentIndex += 2; // Move past ID
+
+            // For Read Response (0x01), there is a Status byte here
+            if (zclCmd == 0x01)
+            {
+                uint8_t status = p[currentIndex];
+                currentIndex++; // Move past Status
+                if (status != 0x00)
+                {
+                    continue; // This attribute read failed, try the next one
+                }
+            }
+
+            uint8_t dataType = p[currentIndex];
+            currentIndex++; // Move past Type
+
+            // Calculate Data Length
+            int dataLength = getDataTypeLength(dataType);
+
+            // Handle Variable Length Strings (0x42)
+            if (dataLength == -1)
+            {
+                if (currentIndex < p.size())
+                {
+                    dataLength = p[currentIndex] + 1; // Length byte + N data bytes
+                }
+                else
+                {
+                    break; // Malformed
+                }
+            }
+
+            // Safety Check: Do we have enough bytes left?
+            if (currentIndex + dataLength > p.size())
+                break;
+
+            // ---------------------------------------------------------
+            // 3. MATCHING LOGIC (Is this the attribute we want?)
+            // ---------------------------------------------------------
+
+            // Temperature (0x0402 -> 0x0000)
+            if (incomingClusterID == ZStack::ClusterID::TEMPERATURE_MEASUREMENT_CLUSTER && attrID == 0x0000)
+            {
+                int16_t raw = p[currentIndex] | (p[currentIndex + 1] << 8);
+                float val = raw / 100.0f;
+                AFPacket::TemperatureReading t;
+                t.shortAddr = srcAddr;
+                t.temperatureReading = val;
+                return std::make_unique<AFPacket::TemperatureReading>(t);
+            }
+
+            // Humidity (0x0405 -> 0x0000)
+            else if (incomingClusterID == ZStack::ClusterID::HUMIDITY_MEASUREMENT_CLUSTER && attrID == 0x0000)
+            {
+                int16_t raw = p[currentIndex] | (p[currentIndex + 1] << 8);
+                float val = raw / 100.0f;
+                AFPacket::HumidityReading h;
+                h.shortAddr = srcAddr;
+                h.humidityReading = val;
+                return std::make_unique<AFPacket::HumidityReading>(h);
+            }
+
+            // On/Off Switch (0x0006 -> 0x0000)
+            else if (incomingClusterID == ZStack::ClusterID::ON_OFF_CLUSTER && attrID == 0x0000)
+            {
+                bool isOn = (p[currentIndex] == 1);
+                LOG_DEBUG << ">>> [" << srcAddr << "] Switch: " << (isOn ? "ON" : "OFF") << std::endl;
+                AFPacket::OnOffReading s;
+                s.shortAddr = srcAddr;
+                s.isOn = isOn;
+                return std::make_unique<AFPacket::OnOffReading>(s);
+            }
+
+            // Electrical Measurement (0x0B04 -> Active Power 0x050B)
+            else if (incomingClusterID == ZStack::ClusterID::POWER_CONSUMPTION_CLUSTER && attrID == 0x050B)
+            {
+                int16_t raw = p[currentIndex] | (p[currentIndex + 1] << 8);
+                // Note: Real power often needs Multiplier/Divisor from other attributes!
+                float watts = (float)raw;
+                LOG_DEBUG << ">>> [" << srcAddr << "] Power: " << watts << "W" << std::endl;
+                // Return your PowerReading struct here...
+            }
+
+            // 4. PREPARE FOR NEXT ITERATION
+            // If we didn't return above, this wasn't the attribute we wanted.
+            // Skip the data bytes and continue loop.
+            currentIndex += dataLength;
+        }
+
+        return nullptr; // Attribute not found in this packet
+    }
+}
 
 namespace AFPacket
 {
@@ -54,10 +193,10 @@ namespace AFPacket
             {
                 LOG_DEBUG << ">>> [" << srcAddr << "] ACTION: Button Pressed (Toggle)" << std::endl;
                 auto msg = std::make_unique<IncomingMessage>();
-                    msg->srcAddress = srcAddr;
-                    msg->clusterID = incomingClusterID;
-                    msg->deviceReading = std::make_unique<ButtonPressAction>();
-                    return msg;
+                msg->srcAddress = srcAddr;
+                msg->clusterID = incomingClusterID;
+                msg->deviceReading = std::make_unique<ButtonPressAction>();
+                return msg;
             }
 
             // ------------------------------------------------
@@ -66,7 +205,8 @@ namespace AFPacket
             else if (zclCmd == 0x0A || zclCmd == 0x01)
             {
                 auto deviceReading = parseDeviceReadingData(zclCmd, srcAddr, incomingClusterID, p);
-                if (deviceReading) {
+                if (deviceReading)
+                {
                     auto msg = std::make_unique<IncomingMessage>();
                     msg->srcAddress = srcAddr;
                     msg->clusterID = incomingClusterID;
@@ -74,74 +214,13 @@ namespace AFPacket
                     return msg;
                 }
             }
-        } else {
+        }
+        else
+        {
             LOG_DEBUG << "[WARNING] AFPacketParser: Unknown Frame Cmd0: " << std::hex << (int)frame.getCommand0()
                       << " Cmd1: " << std::hex << (int)frame.getCommand1() << std::endl;
         }
 
         return nullptr;
     }
-
-    static std::unique_ptr<AFPacket::DeviceReading> parseDeviceReadingData(uint8_t zclCmd, const uint16_t srcAddr, const uint16_t incomingClusterID, const std::vector<uint8_t> p)
-    {
-        uint8_t dataOffset = 17;
-
-        // 1. CALCULATE OFFSETS
-        // Reports (0x0A) start value at offset 6
-        // Read Responses (0x01) have a Status byte, so value starts at offset 7
-        int valueOffset = (zclCmd == 0x0A) ? 6 : 7;
-
-        // For Read Responses, check Success (0x00) before reading
-        if (zclCmd == 0x01 && p[dataOffset + 3] != 0x00)
-        {
-            LOG_DEBUG << ">>> [" << srcAddr << "] Read Failed (Status " << std::hex << (int)p[dataOffset + 3] << ")" << std::endl;
-            return nullptr;
-        }
-
-        uint16_t attrID = p[dataOffset + 3] | (p[dataOffset + 4] << 8);
-
-        // 2. READ DATA USING DYNAMIC OFFSET
-
-        // Temp (Cluster 0x0402)
-        if (incomingClusterID == 0x0402 && attrID == 0x0000)
-        {
-            int16_t rawValue = p[dataOffset + valueOffset] | (p[dataOffset + valueOffset + 1] << 8);
-            float val = rawValue / 100.0f;
-            LOG_DEBUG << ">>> [" << srcAddr << "] Temperature: " << std::fixed << std::setprecision(2) << val << " C" << std::endl;
-            TemperatureReading tempDevice;
-            tempDevice.shortAddr = srcAddr;
-            tempDevice.temperatureReading = val;
-            return std::make_unique<AFPacket::TemperatureReading>(tempDevice);
-        }
-
-        // Humidity (Cluster 0x0405)
-        else if (incomingClusterID == 0x0405 && attrID == 0x0000)
-        {
-            int16_t rawValue = p[dataOffset + valueOffset] | (p[dataOffset + valueOffset + 1] << 8);
-            float val = rawValue / 100.0f;
-            LOG_DEBUG << ">>> [" << srcAddr << "] Humidity: " << std::fixed << std::setprecision(2) << val << " %" << std::endl;
-            HumidityReading humidityDevice;
-            humidityDevice.shortAddr = srcAddr;
-            humidityDevice.humidityReading = val;
-            return std::make_unique<AFPacket::HumidityReading>(humidityDevice);
-        }
-
-        // Battery (Cluster 0x0001)
-        else if (incomingClusterID == 0x0001 && attrID == 0x0021)
-        {
-            // Battery is always 1 byte (uint8)
-            uint8_t rawValue = p[dataOffset + valueOffset];
-            float battery = rawValue / 2.0f;
-            LOG_DEBUG << ">>> [" << srcAddr << "] Battery: " << std::fixed << std::setprecision(1) << battery << "%" << std::endl;
-            BatteryReading batteryReading;
-            batteryReading.shortAddr = srcAddr;
-            batteryReading.batteryLevelReading = battery;
-        } else {
-            LOG_DEBUG << ">>> [" << srcAddr << "] Unknown Device Reading: Cluster " << std::hex << (int) incomingClusterID
-                      << " AttrID " << std::hex << (int) attrID << std::endl;
-        }
-
-        return nullptr;
-    }
-
 }

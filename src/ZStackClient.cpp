@@ -525,7 +525,17 @@ namespace ZStack
         {
             LOG_DEBUG << "ZDO Frame Detected:" << std::hex << std::setw(2) << (int)subsystem << std::endl;
             auto zdoResponse = ZDOPacket::parseZStackFrame(frame);
-            if (zdoResponse && zdoPacketHandler)
+
+            if (zdoResponse == nullptr)
+            {
+                LOG_DEBUG << "Client ZDO Packet Parser returned null." << std::endl;
+            }
+            else
+            {
+                LOG_DEBUG << "Client ZDO Packet Parser returned valid packet." << std::endl;
+            }
+
+            if (zdoPacketHandler)
             {
                 zdoPacketHandler(*zdoResponse);
             }

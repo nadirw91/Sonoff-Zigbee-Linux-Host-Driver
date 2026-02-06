@@ -85,12 +85,15 @@ int main() {
                       << ": ";
 
             printIEEE(myIEEE);
+            size_t activeIndex = 0;
+
             if (activeEp.activeEndpoints.size() > 0) {
                 for (auto ep : activeEp.activeEndpoints) {
                     LOG_INFO << std::hex << (int)ep << " ";
                 }
                 LOG_INFO << std::dec << std::endl;  
-                client.fetchSimpleDescriptor(activeEp.srcAddress, activeEp.activeEndpoints[0]);
+                client.fetchSimpleDescriptor(activeEp.srcAddress, activeEp.activeEndpoints[activeIndex++]);
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
             } else {
                 LOG_INFO << "No Active Endpoints Found" << std::dec << std::endl;
             }            

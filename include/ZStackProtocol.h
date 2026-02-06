@@ -58,14 +58,14 @@ namespace ZStack
         ZDO_STATE_CHANGE_IND = 0xC0,     // (Incoming) The chip tells us its status changed
         ZDO_MGMT_PERMIT_JOIN_REQ = 0x36, // Allow other devices to join
         ZDO_END_DEVICE_ANNCE_IND = 0xC1, // (Incoming) A new device has joined
-        
-        ZDO_BIND_REQ = 0x21,              // Create a binding
-        ZDO_BIND_RSP = 0xA1,
-        
-        ZDO_ACTIVE_EP_REQ = 0x05,        // Request Simple Descriptor
-        ZDO_ACTIVE_EP_RSP = 0x85,         // Response Active Endpoints
 
-        ZDO_SIMPLE_DESC_REQ = 0x04,         // Request Simple Descriptor
+        ZDO_BIND_REQ = 0x21, // Create a binding
+        ZDO_BIND_RSP = 0xA1,
+
+        ZDO_ACTIVE_EP_REQ = 0x05, // Request Simple Descriptor
+        ZDO_ACTIVE_EP_RSP = 0x85, // Response Active Endpoints
+
+        ZDO_SIMPLE_DESC_REQ = 0x04, // Request Simple Descriptor
         ZDO_SIMPLE_DESC_RSP = 0x84
     };
 
@@ -95,7 +95,13 @@ namespace ZStack
         COLOR_CONTROL_CLUSTER = 0x0300,
         TEMPERATURE_MEASUREMENT_CLUSTER = 0x0402,
         HUMIDITY_MEASUREMENT_CLUSTER = 0x0405,
-        BATTERY_LEVEL_CLUSTER = 0x0001
+        BATTERY_LEVEL_CLUSTER = 0x0001,
+
+        // WARN: In ZCL, 0x0702 is usually Summation (Consumption)
+        // and 0x0B04 is Electrical Msmt (Instant).
+        // Your enum names are swapped relative to the hex codes.
+        INSTANTANEOUS_POWER_CONSUMPTION_CLUSTER = 0x0702,
+        POWER_CONSUMPTION_CLUSTER = 0x0B04
     };
 
     const std::map<uint8_t, std::string> zclCommandNameMap =

@@ -535,7 +535,7 @@ namespace ZStack
                 LOG_DEBUG << "Client ZDO Packet Parser returned valid packet." << std::endl;
             }
 
-            if (zdoPacketHandler)
+            if (zdoPacketHandler && zdoResponse)
             {
                 zdoPacketHandler(*zdoResponse);
             }

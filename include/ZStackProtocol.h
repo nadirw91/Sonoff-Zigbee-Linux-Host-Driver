@@ -58,6 +58,7 @@ namespace ZStack
         ZDO_STATE_CHANGE_IND = 0xC0,     // (Incoming) The chip tells us its status changed
         ZDO_MGMT_PERMIT_JOIN_REQ = 0x36, // Allow other devices to join
         ZDO_END_DEVICE_ANNCE_IND = 0xC1, // (Incoming) A new device has joined
+        ZDO_TC_DEV_IND = 0xCA,            // (Incoming) A new device is trying to join securely (with a link key)
 
         ZDO_BIND_REQ = 0x21, // Create a binding
         ZDO_BIND_RSP = 0xA1,

@@ -103,8 +103,6 @@ namespace ZStack {
             void routeFrameToParser(const ZStackFrame& frame);
             
             void send(const ZStackFrame& request);
-
-            std::mutex serialReaderMutex_;
     };
 }
 

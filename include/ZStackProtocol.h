@@ -57,6 +57,7 @@ namespace ZStack
         ZDO_STARTUP_FROM_APP = 0x40,     // Start the network
         ZDO_STATE_CHANGE_IND = 0xC0,     // (Incoming) The chip tells us its status changed
         ZDO_MGMT_PERMIT_JOIN_REQ = 0x36, // Allow other devices to join
+        ZDO_ASYNC_MGMT_PERMIT_JOIN_REQ = 0xB6, // Async version of the above (no ACK expected)
         ZDO_END_DEVICE_ANNCE_IND = 0xC1, // (Incoming) A new device has joined
         ZDO_TC_DEV_IND = 0xCA,            // (Incoming) A new device is trying to join securely (with a link key)
 

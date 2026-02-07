@@ -19,8 +19,9 @@ namespace ZDOPacket
 
         frame.print();
 
-        if (frame.getCommand0() == (SRSP | ZDO) &&
-            frame.getCommand1() == ZDO_MGMT_PERMIT_JOIN_REQ)
+        if ((frame.getCommand0() == (SRSP | ZDO) &&
+            frame.getCommand1() == ZDO_MGMT_PERMIT_JOIN_REQ) || (frame.getCommand0() == (AREQ | ZDO) &&
+            frame.getCommand1() == ZDO_ASYNC_MGMT_PERMIT_JOIN_REQ))
         {
             LOG_INFO << ">>> ZDO Permit Join Request Response Received" << std::endl;
             auto response = std::make_unique<ZDOPacket::PermitJoinRequestResponse>();

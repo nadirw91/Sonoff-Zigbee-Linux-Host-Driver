@@ -272,9 +272,7 @@ namespace ZStack
     }
 
     void ZStackClient::process()
-    {
-        std::lock_guard<std::mutex> lock(serialReaderMutex_); // Ensure we don't have concurrent processing while we do this critical operation
-        
+    {        
         std::vector<uint8_t> buffer;
 
         // 1. Read available bytes (Non-blocking)

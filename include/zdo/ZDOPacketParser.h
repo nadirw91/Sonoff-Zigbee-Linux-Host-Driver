@@ -7,7 +7,9 @@ namespace ZDOPacket {
         DEVICE_ANNOUNCEMENT = 0x01,
         DEVICE_DESCRIPTION = 0x02,
         ACTIVE_ENDPOINTS = 0x03,
-        BIND_RESPONSE = 0x04
+        BIND_RESPONSE = 0x04,
+        BIND_REQ_RESPONSE = 0x05,
+        PERMIT_JOIN_REQ_RESPONSE = 0x06
     };
 
     struct Packet {
@@ -53,6 +55,18 @@ namespace ZDOPacket {
         bool success;
         BindRequestResponse() {
             this->type = BIND_RESPONSE;
+        }
+    };
+
+    struct BindActionRequestResponse: public Packet {
+        BindActionRequestResponse() {
+            this->type = BIND_REQ_RESPONSE;
+        }
+    };
+
+    struct PermitJoinRequestResponse: public Packet {
+        PermitJoinRequestResponse() {
+            this->type = PERMIT_JOIN_REQ_RESPONSE;
         }
     };
 

@@ -41,7 +41,7 @@ namespace ZStack {
 
             std::optional<SysVersion> getSystemVersion(int timeoutMs = 5000);
 
-            bool bindDevice(
+            void bindDevice(
                 uint16_t targetShortAddr, 
                 const std::vector<uint8_t>& targetIEEE,
                 uint16_t clusterID, 
@@ -49,7 +49,7 @@ namespace ZStack {
             );
             bool registerEndpoint();
             void process();
-            bool permitJoin(uint8_t durationSeconds);
+            void permitJoin(uint8_t durationSeconds);
             std::optional<DeviceState> getDeviceState();
             bool startNetwork();
             void reset();
@@ -101,6 +101,10 @@ namespace ZStack {
                                                 int timeoutMs);
             
             void routeFrameToParser(const ZStackFrame& frame);
+            
+            void send(const ZStackFrame& request);
+
+            std::mutex serialReaderMutex_;
     };
 }
 

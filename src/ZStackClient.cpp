@@ -82,6 +82,13 @@ namespace ZStack
         return waitForFrame(expectedCmd0, expectedCmd1, timeoutMs);
     }
 
+    void ZStackClient::send(
+        const ZStackFrame &request
+    )
+    {
+        serialPort->writeBytes(request.toSerialBytes());
+    }
+
     std::optional<SysVersion> ZStackClient::getSystemVersion(int timeoutMs)
     {
         LOG_DEBUG << "Getting System Version..." << std::endl;
@@ -236,7 +243,7 @@ namespace ZStack
     }
 
     // Add to your ZStackClient class
-    bool ZStackClient::permitJoin(uint8_t durationSeconds)
+    void ZStackClient::permitJoin(uint8_t durationSeconds)
     {
         LOG_DEBUG << "Permitting Join for " << (int)durationSeconds << " seconds..." << std::endl;
 
@@ -261,20 +268,13 @@ namespace ZStack
         ZStackFrame req(SREQ | ZDO, ZDO_MGMT_PERMIT_JOIN_REQ, payload);
 
         // Send and wait for success (0x00)
-        auto ack = sendAndWait(req, SRSP | ZDO, ZDO_MGMT_PERMIT_JOIN_REQ);
-
-        if (ack && ack->getPayload().size() > 0 && ack->getPayload()[0] == 0)
-        {
-            LOG_DEBUG << "Join Enabled! Devices can pair now." << std::endl;
-            return true;
-        }
-
-        LOG_DEBUG << "Failed to enable joining." << std::endl;
-        return false;
+        send(req);
     }
 
     void ZStackClient::process()
     {
+        std::lock_guard<std::mutex> lock(serialReaderMutex_); // Ensure we don't have concurrent processing while we do this critical operation
+        
         std::vector<uint8_t> buffer;
 
         // 1. Read available bytes (Non-blocking)
@@ -391,7 +391,7 @@ namespace ZStack
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    bool ZStackClient::bindDevice(
+    void ZStackClient::bindDevice(
         uint16_t targetShortAddr,
         const std::vector<uint8_t> &targetIEEE, // The Sensor's IEEE
         uint16_t clusterID,
@@ -431,21 +431,7 @@ namespace ZStack
 
         // Send Request
         ZStackFrame req(SREQ | ZDO, ZDO_BIND_REQ, payload);
-        auto ack = sendAndWait(req, SRSP | ZDO, ZDO_BIND_REQ);
-
-        if (ack && ack->getPayload().size() > 0 && ack->getPayload()[0] == 0)
-        {
-            LOG_DEBUG << "Bind Success for Cluster 0x" << std::hex << clusterID << "!" << std::endl;
-            return true;
-        }
-
-        auto bindResponse = std::make_unique<ZDOPacket::BindRequestResponse>();
-        bindResponse->srcAddress = targetShortAddr;
-        bindResponse->success = false;
-
-        zdoPacketHandler(*bindResponse);
-
-        return false;
+        send(req);
     }
 
     void ZStackClient::fetchActiveEndpoints(

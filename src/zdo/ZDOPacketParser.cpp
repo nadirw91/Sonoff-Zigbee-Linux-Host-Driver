@@ -19,6 +19,22 @@ namespace ZDOPacket
 
         frame.print();
 
+        if (frame.getCommand0() == (SRSP | ZDO) &&
+            frame.getCommand1() == ZDO_MGMT_PERMIT_JOIN_REQ)
+        {
+            LOG_INFO << ">>> ZDO Permit Join Request Response Received" << std::endl;
+            auto response = std::make_unique<ZDOPacket::PermitJoinRequestResponse>();
+            return response;
+        }
+
+        if (frame.getCommand0() == (SRSP | ZDO) &&
+            frame.getCommand1() == ZDO_BIND_REQ)
+        {
+            LOG_INFO << ">>> ZDO Bind Request Response Received" << std::endl;
+            auto response = std::make_unique<ZDOPacket::BindActionRequestResponse>();
+            return response;
+        }
+
         if (frame.getCommand0() == (AREQ | ZDO) && frame.getCommand1() == ZDO_TC_DEV_IND) {
             LOG_INFO << ">>> ZDO TC Device Indication Received (New Device Joining Securely)" << std::endl;
             auto p = frame.getPayload();

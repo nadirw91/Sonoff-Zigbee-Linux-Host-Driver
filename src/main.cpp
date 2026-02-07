@@ -40,7 +40,7 @@ string getStateName(uint8_t state) {
 #include "DeviceManager.h" // <--- Include this
 
 int main() {
-    Logger::setLevel(LogLevel::INFO);
+    Logger::setLevel(LogLevel::DEBUG);
 
     // 1. Setup Database
     DeviceManager deviceDB("devices.txt");

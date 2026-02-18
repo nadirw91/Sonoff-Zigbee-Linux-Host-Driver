@@ -475,6 +475,55 @@ namespace ZStack
         auto ack = serialPort->writeBytes(req.toSerialBytes());
     }
 
+    void ZStackClient::setSwitchState(
+        uint16_t targetShortAddr,
+        uint8_t endpoint,
+        bool isOn
+    ) {
+        LOG_DEBUG << "Setting Switch State for 0x" << std::hex << targetShortAddr 
+                  << " Endpoint " << std::dec << (int)endpoint 
+                  << " to " << (isOn ? "ON" : "OFF") << "..." << std::endl;
+
+        std::vector<uint8_t> payload;
+
+        // 1. Destination Address (Short Address of the device we want to control)
+        payload.push_back(targetShortAddr & 0xFF);
+        payload.push_back((targetShortAddr >> 8) & 0xFF);
+
+        // 2. Destination Endpoint
+        payload.push_back(endpoint);
+
+        // 3. Src Endpoint (Our Endpoint - we registered Endpoint 1)
+        payload.push_back(0x01); 
+
+        // 4. Cluster ID (On/Off Cluster = 0x0006)
+        payload.push_back(0x06);
+        payload.push_back(0x00);
+
+        // 5. Transaction ID
+        payload.push_back(0x00); 
+
+        // 6. Options (0 = Default)
+        payload.push_back(0x00);
+
+        // 7. Radius (0 = Max): How many hops.
+        payload.push_back(0x1E);
+
+        // 8. Length of Payload
+        payload.push_back(0x03);
+
+        // 9. 
+        payload.push_back(0x01); // Frame Control (0 = Cluster Specific, No Manufacturer, No Direction, No Disable Default Response)
+        payload.push_back(0x05);
+        
+        // 10. Command ID (Toggle = 0x02, On = 0x01, Off = 0x00)
+        payload.push_back(isOn ? 0x01 : 0x00);
+
+        ZStackFrame req(SREQ | AF, AF_DATA_REQUEST, payload);
+
+        auto ack = serialPort->writeBytes(req.toSerialBytes());
+    }
+
     void ZStackClient::routeFrameToParser(const ZStackFrame &frame)
     {
         LOG_DEBUG << "Routing Frame to Parser:" << std::endl;

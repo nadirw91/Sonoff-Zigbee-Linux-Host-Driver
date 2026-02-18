@@ -90,6 +90,12 @@ namespace ZStack {
                 uint8_t endpoint
             );
 
+            void setSwitchState(
+                uint16_t targetShortAddr,
+                uint8_t endpoint,
+                bool isOn
+            );
+
         private:
             std::function<void(const ZDOPacket::Packet&)> zdoPacketHandler;
             std::function<void(const AFPacket::Packet&)> afPacketHandler;

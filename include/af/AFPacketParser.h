@@ -15,6 +15,9 @@ namespace AFPacket {
         SWITCH_DEVICE = 0x05,
         POWER_CONSUMPTION_DEVICE = 0x06,
         INSTANTANEOUS_POWER_CONSUMPTION_CLUSTER = 0x07,
+        PRESENCE_SENSOR = 0x08,
+        MOVEMENT_SENSOR = 0x09,
+        TARGET_DISTANCE_SENSOR = 0x0A,
     };
 
     struct Packet {
@@ -63,6 +66,30 @@ namespace AFPacket {
     struct ButtonPressAction: public DeviceReading {
         ButtonPressAction(){
             this->type = ACTION_PRESS;
+        }
+    };
+
+    struct PresenceReading: public DeviceReading {
+        uint16_t shortAddr;
+        bool present;
+        PresenceReading() {
+            this->type = PRESENCE_SENSOR;
+        }
+    };
+
+    struct MovementReading: public DeviceReading {
+        uint16_t shortAddr;
+        uint8_t movement;
+        MovementReading() {
+            this->type = MOVEMENT_SENSOR;
+        }
+    };
+
+    struct TargetDistanceReading: public DeviceReading {
+        uint16_t shortAddr;
+        float distanceMeters;
+        TargetDistanceReading() {
+            this->type = TARGET_DISTANCE_SENSOR;
         }
     };
     

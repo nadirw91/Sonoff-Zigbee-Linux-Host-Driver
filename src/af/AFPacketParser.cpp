@@ -12,6 +12,15 @@ using namespace ZStack;
 
 namespace
 {
+    constexpr size_t kAfIncomingClusterIdOffset = 2;
+    constexpr size_t kAfIncomingSourceAddressOffset = 4;
+    constexpr size_t kAfIncomingMessageDataOffset = 17;
+    constexpr size_t kZclStandardHeaderLength = 3;
+    constexpr size_t kZclManufacturerSpecificHeaderLength = 5;
+    constexpr uint8_t kZclManufacturerSpecificFrameControlBit = 0x04;
+    constexpr uint8_t kZclSuccessStatus = 0x00;
+    constexpr uint8_t kZclOnOffToggleCommand = 0x02;
+
     // Returns the length of the data value based on ZCL Data Type
     // Returns -1 if variable length (like string) or unknown
     static int getDataTypeLength(uint8_t dataType)
@@ -38,17 +47,17 @@ namespace
         }
     }
 
-    std::unique_ptr<AFPacket::DeviceReading> parseDeviceReadingData(uint8_t zclCmd, const uint16_t srcAddr, const uint16_t incomingClusterID, const std::vector<uint8_t> &p)
+    std::unique_ptr<AFPacket::DeviceReading> parseDeviceReadingData(
+        uint8_t zclCmd,
+        uint16_t srcAddr,
+        uint16_t incomingClusterID,
+        const std::vector<uint8_t> &p,
+        size_t attributeOffset)
     {
-        // 1. Setup Offsets
-        uint8_t dataOffset = 17; // Start of ZCL Frame
-        if (p.size() < dataOffset + 3)
+        if (p.size() < attributeOffset)
             return nullptr;
 
-        // Define where the Attribute List starts inside the ZCL Frame
-        // Reports (0x0A): Frame(3) + AttrList...
-        // ReadRsp (0x01): Frame(3) + AttrList... (Status is inside the loop for ReadRsp)
-        int currentIndex = dataOffset + 3;
+        int currentIndex = static_cast<int>(attributeOffset);
 
         // 2. Loop through all attributes in the packet
         while (currentIndex + 2 < p.size())
@@ -106,6 +115,37 @@ namespace
                 return std::make_unique<AFPacket::TemperatureReading>(t);
             }
 
+            else if (incomingClusterID == ZStack::ClusterID::LUMI_MANUFACTURER_SPECIFIC_CLUSTER &&
+                     attrID == ZStack::LUMI_PRESENCE_ATTRIBUTE && dataLength >= 1)
+            {
+                AFPacket::PresenceReading reading;
+                reading.shortAddr = srcAddr;
+                reading.present = p[currentIndex] == 1;
+                return std::make_unique<AFPacket::PresenceReading>(reading);
+            }
+
+            else if (incomingClusterID == ZStack::ClusterID::LUMI_MANUFACTURER_SPECIFIC_CLUSTER &&
+                     attrID == ZStack::LUMI_MOVEMENT_ATTRIBUTE && dataLength >= 1)
+            {
+                AFPacket::MovementReading reading;
+                reading.shortAddr = srcAddr;
+                reading.movement = p[currentIndex];
+                return std::make_unique<AFPacket::MovementReading>(reading);
+            }
+
+            else if (incomingClusterID == ZStack::ClusterID::LUMI_MANUFACTURER_SPECIFIC_CLUSTER &&
+                     attrID == ZStack::LUMI_TARGET_DISTANCE_ATTRIBUTE && dataLength >= 4)
+            {
+                uint32_t raw = static_cast<uint32_t>(p[currentIndex]) |
+                               (static_cast<uint32_t>(p[currentIndex + 1]) << 8) |
+                               (static_cast<uint32_t>(p[currentIndex + 2]) << 16) |
+                               (static_cast<uint32_t>(p[currentIndex + 3]) << 24);
+                AFPacket::TargetDistanceReading reading;
+                reading.shortAddr = srcAddr;
+                reading.distanceMeters = raw / 100.0f;
+                return std::make_unique<AFPacket::TargetDistanceReading>(reading);
+            }
+
             // Humidity (0x0405 -> 0x0000)
             else if (incomingClusterID == ZStack::ClusterID::HUMIDITY_MEASUREMENT_CLUSTER && attrID == 0x0000)
             {
@@ -156,18 +196,28 @@ namespace AFPacket
             frame.getCommand1() == ZStack::AF_INCOMING_MSG)
         {
             auto p = frame.getPayload();
-            uint16_t srcAddr = p[4] | (p[5] << 8);
+            uint16_t srcAddr = p[kAfIncomingSourceAddressOffset] |
+                               (p[kAfIncomingSourceAddressOffset + 1] << 8);
 
             LOG_DEBUG << ">>> AF_INCOMING_MSG SRC ADDRESS: " << std::hex << std::setw(2) << (int)srcAddr << std::endl;
 
             LOG_DEBUG << ">>> AF_INCOMING_MSG PAYLOAD SIZE: " << std::hex << std::setw(2) << (int)p.size() << std::endl;
 
-            int dataOffset = 17; // Standard Header Size
-            if (p.size() <= dataOffset)
+            if (p.size() <= kAfIncomingMessageDataOffset)
                 return nullptr;
 
-            uint8_t zclCmd = p[dataOffset + 2];
-            uint16_t incomingClusterID = p[2] | (p[3] << 8);
+            uint8_t zclFrameControl = p[kAfIncomingMessageDataOffset];
+            bool manufacturerSpecific =
+                (zclFrameControl & kZclManufacturerSpecificFrameControlBit) != 0;
+            size_t zclHeaderLength = manufacturerSpecific
+                                         ? kZclManufacturerSpecificHeaderLength
+                                         : kZclStandardHeaderLength;
+            if (p.size() < kAfIncomingMessageDataOffset + zclHeaderLength)
+                return nullptr;
+
+            uint8_t zclCmd = p[kAfIncomingMessageDataOffset + zclHeaderLength - 1];
+            uint16_t incomingClusterID = p[kAfIncomingClusterIdOffset] |
+                                         (p[kAfIncomingClusterIdOffset + 1] << 8);
 
             LOG_DEBUG << ">>> [Config Response] From " << srcAddr
                       << " (Cluster " << getClusterName(incomingClusterID) << ") "
@@ -177,19 +227,24 @@ namespace AFPacket
             // ------------------------------------------------
             // CASE A: CONFIGURATION RESPONSE (Receipt)
             // ------------------------------------------------
-            if (zclCmd == 0x07)
+            if (zclCmd == ZStack::ZCL_CONFIG_REPORTING_RSP)
             {
-                uint8_t status = p[dataOffset + 3];
-                if (status == 0x00)
-                    LOG_DEBUG << "    Result: SUCCESS" << std::endl;
-                else
-                    LOG_DEBUG << "    Result: FAIL (Code " << std::hex << (int)status << ")" << std::endl;
+                size_t statusOffset = kAfIncomingMessageDataOffset + zclHeaderLength;
+                if (statusOffset < p.size())
+                {
+                    uint8_t status = p[statusOffset];
+                    if (status == kZclSuccessStatus)
+                        LOG_DEBUG << "    Result: SUCCESS" << std::endl;
+                    else
+                        LOG_DEBUG << "    Result: FAIL (Code " << std::hex << (int)status << ")" << std::endl;
+                }
             }
 
             // ------------------------------------------------
             // CASE B: TOGGLE COMMAND (Button Press) - MOVED HERE!
             // ------------------------------------------------
-            else if (incomingClusterID == 0x0006 && zclCmd == 0x02)
+            else if (incomingClusterID == ZStack::ClusterID::ON_OFF_CLUSTER &&
+                     zclCmd == kZclOnOffToggleCommand)
             {
                 LOG_DEBUG << ">>> [" << srcAddr << "] ACTION: Button Pressed (Toggle)" << std::endl;
                 auto msg = std::make_unique<IncomingMessage>();
@@ -202,9 +257,15 @@ namespace AFPacket
             // ------------------------------------------------
             // CASE C: SENSOR DATA (Report or Read Response)
             // ------------------------------------------------
-            else if (zclCmd == 0x0A || zclCmd == 0x01)
+            else if (zclCmd == ZStack::ZCL_REPORT_ATTRIB ||
+                     zclCmd == ZStack::ZCL_READ_ATTRIB_RSP)
             {
-                auto deviceReading = parseDeviceReadingData(zclCmd, srcAddr, incomingClusterID, p);
+                auto deviceReading = parseDeviceReadingData(
+                    zclCmd,
+                    srcAddr,
+                    incomingClusterID,
+                    p,
+                    kAfIncomingMessageDataOffset + zclHeaderLength);
                 if (deviceReading)
                 {
                     auto msg = std::make_unique<IncomingMessage>();

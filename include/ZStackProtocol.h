@@ -98,12 +98,20 @@ namespace ZStack
         TEMPERATURE_MEASUREMENT_CLUSTER = 0x0402,
         HUMIDITY_MEASUREMENT_CLUSTER = 0x0405,
         BATTERY_LEVEL_CLUSTER = 0x0001,
+        LUMI_MANUFACTURER_SPECIFIC_CLUSTER = 0xFCC0,
 
         // WARN: In ZCL, 0x0702 is usually Summation (Consumption)
         // and 0x0B04 is Electrical Msmt (Instant).
         // Your enum names are swapped relative to the hex codes.
         INSTANTANEOUS_POWER_CONSUMPTION_CLUSTER = 0x0702,
         POWER_CONSUMPTION_CLUSTER = 0x0B04
+    };
+
+    enum LumiAttributeID : uint16_t
+    {
+        LUMI_PRESENCE_ATTRIBUTE = 0x0142,
+        LUMI_TARGET_DISTANCE_ATTRIBUTE = 0x015F,
+        LUMI_MOVEMENT_ATTRIBUTE = 0x0160
     };
 
     const std::map<uint8_t, std::string> zclCommandNameMap =

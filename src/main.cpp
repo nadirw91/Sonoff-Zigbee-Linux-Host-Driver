@@ -1,9 +1,11 @@
 #include <iostream>
+#include <algorithm>
 #include "ZStackClient.h"
 #include "DeviceManager.h"
 #include "TemperatureRecorder.h"
 #include <thread>
 #include <chrono>
+#include <map>
 #include "AFDataRequest.h"
 #include "Logger.h"
 
@@ -66,6 +68,7 @@ int main() {
     LOG_INFO << "--- Main Loop Started ---" << std::endl;
     auto startTime = std::chrono::steady_clock::now();
     auto timeout = 100;
+    std::map<uint16_t, std::vector<uint8_t>> ieeeAddressesByShortAddress;
 
 
     client.setZdoPacketHandler([&](const ZDOPacket::Packet& packet) {
@@ -75,6 +78,12 @@ int main() {
             LOG_INFO << "ShortAddr=" << std::hex << devAnnce.srcAddress;
             LOG_INFO << " IEEE=" << std::hex << devAnnce.ieeeAddress;
             LOG_INFO << " Type: " << devAnnce.type << "\n";
+
+            std::vector<uint8_t> targetIEEE(8);
+            for (size_t i = 0; i < targetIEEE.size(); ++i) {
+                targetIEEE[i] = static_cast<uint8_t>(devAnnce.ieeeAddress >> (i * 8));
+            }
+            ieeeAddressesByShortAddress[devAnnce.networkAddress] = targetIEEE;
 
             client.fetchActiveEndpoints(devAnnce.srcAddress);
             // Get Device Capabilities
@@ -100,6 +109,20 @@ int main() {
 
         } else if (packet.type == ZDOPacket::DEVICE_DESCRIPTION) {
             auto simpleDesc = static_cast<const ZDOPacket::DeviceDescriptionResponse&>(packet);
+            auto ieeeAddress = ieeeAddressesByShortAddress.find(simpleDesc.networkAddress);
+            bool supportsLumiCluster = std::find(
+                simpleDesc.inputClusters.begin(),
+                simpleDesc.inputClusters.end(),
+                ZStack::ClusterID::LUMI_MANUFACTURER_SPECIFIC_CLUSTER) != simpleDesc.inputClusters.end();
+
+            if (supportsLumiCluster && ieeeAddress != ieeeAddressesByShortAddress.end()) {
+                client.bindDevice(
+                    simpleDesc.networkAddress,
+                    ieeeAddress->second,
+                    ZStack::ClusterID::LUMI_MANUFACTURER_SPECIFIC_CLUSTER,
+                    myIEEE);
+            }
+
             LOG_INFO << ">>> [ZDO] Simple Descriptor for ShortAddr=" 
                       << std::hex << simpleDesc.sourceAddress 
                       << " Endpoint=" << std::dec << (int)simpleDesc.endpoint 
@@ -135,6 +158,15 @@ int main() {
                           << tempReading.temperatureReading << " C" << std::endl;
             
                 tempRecorder.saveTemperatureReading(tempReading.temperatureReading);
+            } else if (incomingMsg.deviceReading->type == AFPacket::PRESENCE_SENSOR) {
+                auto& presence = static_cast<const AFPacket::PresenceReading&>(*incomingMsg.deviceReading);
+                LOG_INFO << "    Presence: " << (presence.present ? "detected" : "clear") << std::endl;
+            } else if (incomingMsg.deviceReading->type == AFPacket::MOVEMENT_SENSOR) {
+                auto& movement = static_cast<const AFPacket::MovementReading&>(*incomingMsg.deviceReading);
+                LOG_INFO << "    Movement state: " << static_cast<int>(movement.movement) << std::endl;
+            } else if (incomingMsg.deviceReading->type == AFPacket::TARGET_DISTANCE_SENSOR) {
+                auto& distance = static_cast<const AFPacket::TargetDistanceReading&>(*incomingMsg.deviceReading);
+                LOG_INFO << "    Target distance: " << distance.distanceMeters << " m" << std::endl;
             }
         }
     });

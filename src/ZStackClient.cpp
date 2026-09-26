@@ -323,8 +323,9 @@ namespace ZStack
         payload.push_back(0x00);
 
         // 6. Input Clusters (What we listen for)
-        // Let's say we listen for nothing for now to keep it simple
-        payload.push_back(0x00); // Count = 0
+        payload.push_back(0x01); // Count = 1
+        payload.push_back(0xC0); // Aqara Lumi manufacturer-specific cluster 0xFCC0
+        payload.push_back(0xFC);
 
         // 7 Output Clusters (What we control)
         payload.push_back(0x02); // Count = 2

@@ -18,6 +18,7 @@ namespace AFPacket {
         PRESENCE_SENSOR = 0x08,
         MOVEMENT_SENSOR = 0x09,
         TARGET_DISTANCE_SENSOR = 0x0A,
+        DEFAULT_RESPONSE = 0x0B,
     };
 
     struct Packet {
@@ -63,7 +64,15 @@ namespace AFPacket {
         }
     };
 
+    // Cluster-specific On/Off command IDs (ZCL 0x0006)
+    enum OnOffCommand : uint8_t {
+        ON_OFF_COMMAND_OFF = 0x00,
+        ON_OFF_COMMAND_ON = 0x01,
+        ON_OFF_COMMAND_TOGGLE = 0x02
+    };
+
     struct ButtonPressAction: public DeviceReading {
+        OnOffCommand command = ON_OFF_COMMAND_TOGGLE;
         ButtonPressAction(){
             this->type = ACTION_PRESS;
         }
@@ -93,6 +102,17 @@ namespace AFPacket {
         }
     };
     
+    // ZCL Default Response (global 0x0B): result of a command that has no
+    // dedicated response, e.g. On/Off. Cluster is in IncomingMessage::clusterID.
+    struct DefaultResponse: public DeviceReading {
+        uint16_t shortAddr;
+        uint8_t forCommand; // Command ID being answered (e.g. 0x01 = On)
+        uint8_t status;     // 0x00 = Success, otherwise ZCL error status
+        DefaultResponse() {
+            this->type = DEFAULT_RESPONSE;
+        }
+    };
+
     struct IncomingMessage : public Packet {
         uint16_t srcAddress;
         uint16_t clusterID;

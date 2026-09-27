@@ -18,8 +18,10 @@ namespace
     constexpr size_t kZclStandardHeaderLength = 3;
     constexpr size_t kZclManufacturerSpecificHeaderLength = 5;
     constexpr uint8_t kZclManufacturerSpecificFrameControlBit = 0x04;
+    constexpr uint8_t kZclFrameTypeMask = 0x03;
+    constexpr uint8_t kZclFrameTypeGlobal = 0x00;
+    constexpr uint8_t kZclFrameTypeClusterSpecific = 0x01;
     constexpr uint8_t kZclSuccessStatus = 0x00;
-    constexpr uint8_t kZclOnOffToggleCommand = 0x02;
 
     // Returns the length of the data value based on ZCL Data Type
     // Returns -1 if variable length (like string) or unknown
@@ -207,6 +209,9 @@ namespace AFPacket
                 return nullptr;
 
             uint8_t zclFrameControl = p[kAfIncomingMessageDataOffset];
+            // Frame type (bits 0-1): Global and cluster-specific command IDs overlap,
+            // e.g. 0x01 is Read Attributes Response (global) but On (On/Off cluster)
+            uint8_t zclFrameType = zclFrameControl & kZclFrameTypeMask;
             bool manufacturerSpecific =
                 (zclFrameControl & kZclManufacturerSpecificFrameControlBit) != 0;
             size_t zclHeaderLength = manufacturerSpecific
@@ -223,7 +228,34 @@ namespace AFPacket
                       << " (Cluster " << getClusterName(incomingClusterID) << ") "
                       << "ZCL Cmd: " << getZCLCommandName(zclCmd) << std::endl;
 
-            // A. CHECK FOR CONFIG RESPONSE (Receipt)
+            // ------------------------------------------------
+            // CASE B: ON/OFF COMMAND (Button Press: Off / On / Toggle)
+            // ------------------------------------------------
+            if (zclFrameType == kZclFrameTypeClusterSpecific)
+            {
+                if (incomingClusterID == ZStack::ClusterID::ON_OFF_CLUSTER &&
+                    zclCmd <= ON_OFF_COMMAND_TOGGLE)
+                {
+                    LOG_DEBUG << ">>> [" << srcAddr << "] ACTION: Button Pressed (Command "
+                              << std::hex << (int)zclCmd << ")" << std::endl;
+                    auto action = std::make_unique<ButtonPressAction>();
+                    action->command = static_cast<OnOffCommand>(zclCmd);
+
+                    auto msg = std::make_unique<IncomingMessage>();
+                    msg->srcAddress = srcAddr;
+                    msg->clusterID = incomingClusterID;
+                    msg->deviceReading = std::move(action);
+                    return msg;
+                }
+
+                LOG_DEBUG << ">>> [" << srcAddr << "] Unhandled cluster-specific command "
+                          << std::hex << (int)zclCmd << std::endl;
+                return nullptr;
+            }
+
+            if (zclFrameType != kZclFrameTypeGlobal)
+                return nullptr; // Reserved frame types
+
             // ------------------------------------------------
             // CASE A: CONFIGURATION RESPONSE (Receipt)
             // ------------------------------------------------
@@ -240,18 +272,30 @@ namespace AFPacket
                 }
             }
 
+
             // ------------------------------------------------
-            // CASE B: TOGGLE COMMAND (Button Press) - MOVED HERE!
+            // CASE D: DEFAULT RESPONSE (Command result: success / error)
             // ------------------------------------------------
-            else if (incomingClusterID == ZStack::ClusterID::ON_OFF_CLUSTER &&
-                     zclCmd == kZclOnOffToggleCommand)
+            else if (zclCmd == ZStack::ZCL_DEFAULT_RSP)
             {
-                LOG_DEBUG << ">>> [" << srcAddr << "] ACTION: Button Pressed (Toggle)" << std::endl;
-                auto msg = std::make_unique<IncomingMessage>();
-                msg->srcAddress = srcAddr;
-                msg->clusterID = incomingClusterID;
-                msg->deviceReading = std::make_unique<ButtonPressAction>();
-                return msg;
+                size_t offset = kAfIncomingMessageDataOffset + zclHeaderLength;
+                if (offset + 1 < p.size())
+                {
+                    auto response = std::make_unique<DefaultResponse>();
+                    response->shortAddr = srcAddr;
+                    response->forCommand = p[offset];
+                    response->status = p[offset + 1];
+
+                    LOG_DEBUG << ">>> [" << srcAddr << "] Default Response for Cmd "
+                              << std::hex << (int)response->forCommand
+                              << " Status " << (int)response->status << std::endl;
+
+                    auto msg = std::make_unique<IncomingMessage>();
+                    msg->srcAddress = srcAddr;
+                    msg->clusterID = incomingClusterID;
+                    msg->deviceReading = std::move(response);
+                    return msg;
+                }
             }
 
             // ------------------------------------------------

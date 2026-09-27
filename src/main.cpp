@@ -168,6 +168,15 @@ int main() {
             } else if (incomingMsg.deviceReading->type == AFPacket::TARGET_DISTANCE_SENSOR) {
                 auto& distance = static_cast<const AFPacket::TargetDistanceReading&>(*incomingMsg.deviceReading);
                 LOG_INFO << "    Target distance: " << distance.distanceMeters << " m" << std::endl;
+            } else if (incomingMsg.deviceReading->type == AFPacket::DEFAULT_RESPONSE) {
+                auto& response = static_cast<const AFPacket::DefaultResponse&>(*incomingMsg.deviceReading);
+                if (response.status == 0x00) {
+                    LOG_DEBUG << "    Command 0x" << std::hex << (int)response.forCommand << " succeeded" << std::endl;
+                } else {
+                    LOG_INFO << "    Command 0x" << std::hex << (int)response.forCommand
+                             << " on Cluster 0x" << (int)incomingMsg.clusterID
+                             << " FAILED (Status 0x" << (int)response.status << ")" << std::endl;
+                }
             }
         }
     });

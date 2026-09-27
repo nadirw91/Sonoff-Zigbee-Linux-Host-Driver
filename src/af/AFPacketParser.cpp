@@ -12,6 +12,36 @@ using namespace ZStack;
 
 namespace
 {
+    // AF_INCOMING_MSG (AREQ 0x44 0x81) payload layout (multi-byte fields Little Endian):
+    //
+    //   Offset  Size  Field
+    //   0       2     GroupId (0 unless group message)
+    //   2       2     ClusterId
+    //   4       2     SrcAddr (sender short address)
+    //   6       1     SrcEndpoint (sender endpoint)
+    //   7       1     DstEndpoint (our registered endpoint)
+    //   8       1     WasBroadcast
+    //   9       1     LinkQuality (LQI 0-255)
+    //   10      1     SecurityUse
+    //   11      4     Timestamp
+    //   15      1     TransSeqNumber
+    //   16      1     Len (length of Data)
+    //   17      Len   Data (ZCL frame)
+    //
+    // ZCL frame (starts at Data):
+    //
+    //   Frame Control      1  bits 0-1: frame type (00 = global, 01 = cluster-specific)
+    //                         bit 2: manufacturer-specific, bit 3: direction,
+    //                         bit 4: disable default response
+    //   Manufacturer Code  2  only present if bit 2 is set (e.g. Lumi 0x115F)
+    //   Sequence Number    1  matches a response to its request
+    //   Command ID         1  meaning depends on frame type (and cluster if cluster-specific)
+    //   Payload            ...
+    //
+    // Example: On/Off report (Switch ON) from 0x1A2B
+    //   00 00 | 06 00 | 2B 1A | 01 | 01 | 00 | 50 | 00 | 00 00 00 00 | 00 | 07 | 18 13 0A 00 00 10 01
+    //   Group   Clust   Src     SEp  DEp  Br   LQI  Sec  Timestamp     Seq  Len  FC Sq Cm Attr  Ty Val
+    //   -> global (FC 0x18), Report Attributes (0x0A), attr 0x0000, Boolean (0x10), value 0x01
     constexpr size_t kAfIncomingClusterIdOffset = 2;
     constexpr size_t kAfIncomingSourceAddressOffset = 4;
     constexpr size_t kAfIncomingMessageDataOffset = 17;

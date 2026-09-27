@@ -41,15 +41,16 @@ namespace ZStack {
 
             std::optional<SysVersion> getSystemVersion(int timeoutMs = 5000);
 
-            void bindDevice(
+            bool bindDevice(
                 uint16_t targetShortAddr, 
                 const std::vector<uint8_t>& targetIEEE,
+                uint8_t srcEndpoint,
                 uint16_t clusterID, 
                 const std::vector<uint8_t>& myIEEE
             );
             bool registerEndpoint();
             void process();
-            void permitJoin(uint8_t durationSeconds);
+            bool permitJoin(uint8_t durationSeconds);
             std::optional<DeviceState> getDeviceState();
             bool startNetwork();
             void reset();

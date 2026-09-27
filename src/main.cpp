@@ -119,6 +119,7 @@ int main() {
                 client.bindDevice(
                     simpleDesc.networkAddress,
                     ieeeAddress->second,
+                    simpleDesc.endpoint,
                     ZStack::ClusterID::LUMI_MANUFACTURER_SPECIFIC_CLUSTER,
                     myIEEE);
             }

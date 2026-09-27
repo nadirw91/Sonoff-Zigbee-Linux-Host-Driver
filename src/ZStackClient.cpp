@@ -243,7 +243,7 @@ namespace ZStack
     }
 
     // Add to your ZStackClient class
-    void ZStackClient::permitJoin(uint8_t durationSeconds)
+    bool ZStackClient::permitJoin(uint8_t durationSeconds)
     {
         LOG_DEBUG << "Permitting Join for " << (int)durationSeconds << " seconds..." << std::endl;
 
@@ -268,7 +268,20 @@ namespace ZStack
         ZStackFrame req(SREQ | ZDO, ZDO_MGMT_PERMIT_JOIN_REQ, payload);
 
         // Send and wait for success (0x00)
-        send(req);
+        auto response = sendAndWait(req, SRSP | ZDO, ZDO_MGMT_PERMIT_JOIN_REQ);
+
+        if (response && response->getPayload().size() > 0 && response->getPayload()[0] == 0x00)
+        {
+            LOG_DEBUG << "Permit Join Command Accepted." << std::endl;
+
+            return true;
+        }
+        else
+        {
+            LOG_DEBUG << "Permit Join Command Failed or No Response." << std::endl;
+
+            return false;
+        }
     }
 
     void ZStackClient::process()
@@ -322,21 +335,12 @@ namespace ZStack
         // 5. Latency Requirements (0 = No Latency)
         payload.push_back(0x00);
 
-        // 6. Input Clusters (What we listen for)
-        payload.push_back(0x01); // Count = 1
-        payload.push_back(0xC0); // Aqara Lumi manufacturer-specific cluster 0xFCC0
-        payload.push_back(0xFC);
+        // 6. Input Clusters (Server side: clusters we implement for other devices)
+        payload.push_back(0x00); // Count = 0
 
-        // 7 Output Clusters (What we control)
-        payload.push_back(0x02); // Count = 2
-
-        // Temperature (0x0402);
-        payload.push_back(0x02);
-        payload.push_back(0x04);
-
-        // Humidity (0x0405);
-        payload.push_back(0x05);
-        payload.push_back(0x04);
+        // 7. Output Clusters (Client side: clusters on other devices we consume)
+        // None registered: Z-Stack delivers all AF messages for this endpoint regardless
+        payload.push_back(0x00); // Count = 0
 
         ZStackFrame req(SREQ | AF, AF_REGISTER, payload);
 
@@ -390,9 +394,10 @@ namespace ZStack
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    void ZStackClient::bindDevice(
+    bool ZStackClient::bindDevice(
         uint16_t targetShortAddr,
         const std::vector<uint8_t> &targetIEEE, // The Sensor's IEEE
+        uint8_t srcEndpoint,                     // The Sensor's endpoint that has the cluster
         uint16_t clusterID,
         const std::vector<uint8_t> &myIEEE // Your Coordinator's IEEE
     )
@@ -412,8 +417,8 @@ namespace ZStack
         payload.insert(payload.end(), targetIEEE.begin(), targetIEEE.end());
 
         // 3. Source Endpoint (The Sensor's "Port")
-        // Most sensors transmit from Endpoint 1.
-        payload.push_back(0x01);
+        // Taken from the Simple Descriptor that reported this cluster
+        payload.push_back(srcEndpoint);
 
         // 4. Cluster ID (What data to send? Temp = 0x0402)
         payload.push_back(clusterID & 0xFF);
@@ -430,7 +435,19 @@ namespace ZStack
 
         // Send Request
         ZStackFrame req(SREQ | ZDO, ZDO_BIND_REQ, payload);
-        send(req);
+
+        // Wait for the SRSP (status 0x00 = request accepted).
+        // The sensor's actual answer arrives later as ZDO_BIND_RSP (AREQ).
+        auto ack = sendAndWait(req, SRSP | ZDO, ZDO_BIND_REQ);
+
+        if (ack && ack->getPayload().size() > 0 && ack->getPayload()[0] == 0)
+        {
+            LOG_DEBUG << "Bind Request Accepted." << std::endl;
+            return true;
+        }
+
+        LOG_DEBUG << "Bind Request Failed." << std::endl;
+        return false;
     }
 
     void ZStackClient::fetchActiveEndpoints(
@@ -448,7 +465,16 @@ namespace ZStack
 
         ZStackFrame req(SREQ | ZDO, ZDO_ACTIVE_EP_REQ, payload);
 
-        auto ack = serialPort->writeBytes(req.toSerialBytes());
+        auto ack = sendAndWait(req, SRSP | ZDO, ZDO_ACTIVE_EP_REQ);
+
+        if (ack)
+        {
+            LOG_DEBUG << "Active Endpoints Request Acknowledged." << std::endl;
+        }
+        else
+        {
+            LOG_DEBUG << "No Acknowledgment for Active Endpoints Request." << std::endl;
+        }
     }
 
     void ZStackClient::fetchSimpleDescriptor(
@@ -473,7 +499,16 @@ namespace ZStack
 
         ZStackFrame req(SREQ | ZDO, ZDO_SIMPLE_DESC_REQ, payload);
 
-        auto ack = serialPort->writeBytes(req.toSerialBytes());
+        auto ack = sendAndWait(req, SRSP | ZDO, ZDO_SIMPLE_DESC_REQ);
+
+        if (ack)
+        {
+            LOG_DEBUG << "Simple Descriptor Request Acknowledged." << std::endl;
+        }
+        else
+        {
+            LOG_DEBUG << "No Acknowledgment for Simple Descriptor Request." << std::endl;
+        }
     }
 
     void ZStackClient::setSwitchState(
@@ -522,7 +557,16 @@ namespace ZStack
 
         ZStackFrame req(SREQ | AF, AF_DATA_REQUEST, payload);
 
-        auto ack = serialPort->writeBytes(req.toSerialBytes());
+        auto ack = sendAndWait(req, SRSP | AF, AF_DATA_REQUEST);
+
+        if (ack)
+        {
+            LOG_DEBUG << "Switch State Command Acknowledged." << std::endl;
+        }
+        else
+        {
+            LOG_DEBUG << "No Acknowledgment for Switch State Command." << std::endl;
+        }
     }
 
     void ZStackClient::routeFrameToParser(const ZStackFrame &frame)

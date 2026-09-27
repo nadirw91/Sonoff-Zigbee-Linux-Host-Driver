@@ -107,6 +107,15 @@ namespace ZStack
         POWER_CONSUMPTION_CLUSTER = 0x0B04
     };
 
+    // ZCL attribute data types (used in Configure Reporting / Report Attributes)
+    enum ZclDataType : uint8_t
+    {
+        ZCL_DATA_TYPE_BOOLEAN = 0x10,
+        ZCL_DATA_TYPE_UINT8 = 0x20,
+        ZCL_DATA_TYPE_UINT16 = 0x21,
+        ZCL_DATA_TYPE_INT16 = 0x29
+    };
+
     enum LumiAttributeID : uint16_t
     {
         LUMI_PRESENCE_ATTRIBUTE = 0x0142,

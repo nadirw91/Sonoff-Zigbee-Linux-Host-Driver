@@ -89,40 +89,53 @@ namespace ZStack
             return afRequest;
         };
 
-        static AFDataRequest configureReporting(uint16_t shortAddr, uint16_t clusterID, uint8_t dataType)
+        // Generic ZCL Configure Reporting (Command 0x06) for a single attribute.
+        // reportableChange is only sent for analog (integer) data types;
+        // discrete types such as Boolean must not include it.
+        static AFDataRequest configureReporting(
+            uint16_t shortAddr,
+            uint8_t dstEndpoint,
+            uint16_t clusterID,
+            uint16_t attributeID,
+            uint8_t dataType,
+            uint16_t minIntervalSeconds,
+            uint16_t maxIntervalSeconds,
+            uint32_t reportableChange = 0)
         {
             std::cout << "[Config] Sending Reporting Configuration to " << std::hex << shortAddr
-                      << " for Cluster " << clusterID << "..." << std::endl;
+                      << " for Cluster " << clusterID << " Attribute " << attributeID << "..." << std::endl;
 
             std::vector<uint8_t> payload;
             payload.push_back(0x00); // Frame Control
             payload.push_back(0x11); // Sequence
-            payload.push_back(0x06); // Command: Configure Reporting
+            payload.push_back(ZCL_CONFIG_REPORTING_REQ); // Command: Configure Reporting
 
             // Payload Details
-            payload.push_back(0x00);     // Direction: Reported
-            payload.push_back(0x00);     // Attr ID Low (Measured Value)
-            payload.push_back(0x00);     // Attr ID High
-            payload.push_back(dataType); // Data Type: INT16 (Temp/Humidity standard)
+            payload.push_back(0x00);                       // Direction: Reported
+            payload.push_back(attributeID & 0xFF);         // Attr ID Low
+            payload.push_back((attributeID >> 8) & 0xFF);  // Attr ID High
+            payload.push_back(dataType);                   // Data Type
 
-            // Min Interval: 10 seconds (0x000A)
-            payload.push_back(0x0A);
-            payload.push_back(0x00);
+            // Min Interval (seconds, Little Endian)
+            payload.push_back(minIntervalSeconds & 0xFF);
+            payload.push_back((minIntervalSeconds >> 8) & 0xFF);
 
-            // Max Interval: 10 Minutes (600s = 0x0258)
-            // Little Endian -> 58 02
-            payload.push_back(0x58);
-            payload.push_back(0x02);
+            // Max Interval (seconds, Little Endian)
+            payload.push_back(maxIntervalSeconds & 0xFF);
+            payload.push_back((maxIntervalSeconds >> 8) & 0xFF);
 
-            // Reportable Change: 0.20 (Value 20 = 0x0014)
-            payload.push_back(0x14);
-            payload.push_back(0x00);
+            // Reportable Change: same size as the attribute, analog types only
+            int changeSize = analogDataTypeSize(dataType);
+            for (int i = 0; i < changeSize; i++)
+            {
+                payload.push_back((reportableChange >> (i * 8)) & 0xFF);
+            }
 
             // Wrap in AF_DATA_REQUEST
             std::vector<uint8_t> afPayload;
             afPayload.push_back(shortAddr & 0xFF);
             afPayload.push_back((shortAddr >> 8) & 0xFF);
-            afPayload.push_back(0x01);                    // Dst Endpoint
+            afPayload.push_back(dstEndpoint);             // Dst Endpoint
             afPayload.push_back(0x01);                    // Src Endpoint
             afPayload.push_back(clusterID & 0xFF);        // Cluster Low
             afPayload.push_back((clusterID >> 8) & 0xFF); // Cluster High
@@ -140,6 +153,34 @@ namespace ZStack
             afRequest.excpectedResponseCommand1 = AF_DATA_REQUEST;
 
             return afRequest;
+        };
+
+        // Switch (On/Off 0x0006, OnOff 0x0000, Boolean)
+        // Min 0s so manual toggles are reported immediately, Max 5 min heartbeat.
+        static AFDataRequest configureSwitchReporting(uint16_t shortAddr, uint8_t dstEndpoint)
+        {
+            return configureReporting(
+                shortAddr,
+                dstEndpoint,
+                ON_OFF_CLUSTER,
+                0x0000,
+                ZCL_DATA_TYPE_BOOLEAN,
+                0,    // Min Interval: 0 seconds
+                300); // Max Interval: 5 minutes
+        };
+
+        // Temperature (0x0402, MeasuredValue 0x0000, INT16 in 0.01 C)
+        static AFDataRequest configureTemperatureReporting(uint16_t shortAddr, uint8_t dstEndpoint)
+        {
+            return configureReporting(
+                shortAddr,
+                dstEndpoint,
+                TEMPERATURE_MEASUREMENT_CLUSTER,
+                0x0000,
+                ZCL_DATA_TYPE_INT16,
+                10,  // Min Interval: 10 seconds
+                600, // Max Interval: 10 minutes
+                20); // Reportable Change: 0.20 C
         };
 
         static AFDataRequest readReportingConfig(uint16_t shortAddr, uint16_t clusterID)
@@ -180,6 +221,18 @@ namespace ZStack
 
             return afRequest;
         };
+
+    private:
+        // Size in bytes of an analog (integer) ZCL data type, or 0 for discrete types.
+        // uint8..uint64 = 0x20..0x27, int8..int64 = 0x28..0x2F
+        static int analogDataTypeSize(uint8_t dataType)
+        {
+            if (dataType >= 0x20 && dataType <= 0x2F)
+            {
+                return (dataType & 0x07) + 1;
+            }
+            return 0;
+        }
     };
 };
 
